@@ -29,7 +29,7 @@ async function geminiCall(geminiKey: string, prompt: string): Promise<string> {
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: {
           temperature: 0.1,
-          maxOutputTokens: 800,
+          maxOutputTokens: 1500,
           responseMimeType: 'application/json'
         }
       })
@@ -51,8 +51,7 @@ export async function analyzeAccount(
 ): Promise<AnalysisResult> {
 
   const condensed = campaigns.slice(0, 8).map(c => ({
-    n: c.name.substring(0, 30),
-    s: c.status,
+    n: c.name.substring(0, 25),
     sp: c.spend,
     r: parseFloat(c.roas.toFixed(2)),
     ct: parseFloat(c.ctr.toFixed(2)),
@@ -60,22 +59,18 @@ export async function analyzeAccount(
     cv: c.conversions,
   }))
 
-  // Step 1: Get summary and score
-  const step1 = await geminiCall(geminiKey, 
-    `Meta Ads account analysis. Goals: ${goals || 'Maximize ROAS'}. Data: ${JSON.stringify(condensed)}
-    
-Return JSON only: {"summary":"2 sentence overview","score":75}`)
+  const dataStr = JSON.stringify(condensed)
 
-  // Step 2: Get suggestions separately  
+  const step1 = await geminiCall(geminiKey,
+    `Meta Ads data: ${dataStr}
+Goals: ${goals || 'Maximize ROAS'}
+Return JSON: {"summary":"max 100 chars total","score":75}
+Keep summary under 100 characters.`)
+
   const step2 = await geminiCall(geminiKey,
-    `Meta Ads campaigns: ${JSON.stringify(condensed)}
-    
-Return JSON only with exactly 3 suggestions:
-{"suggestions":[
-{"title":"t","priority":"high","type":"scale","campaign":"c","adset":null,"ad":null,"detail":"d","impact":"i","metric":"m"},
-{"title":"t","priority":"medium","type":"fix","campaign":"c","adset":null,"ad":null,"detail":"d","impact":"i","metric":"m"},
-{"title":"t","priority":"low","type":"test","campaign":"c","adset":null,"ad":null,"detail":"d","impact":"i","metric":"m"}
-]}`)
+    `Meta Ads data: ${dataStr}
+Return JSON with 3 suggestions. Keep each field under 60 chars:
+{"suggestions":[{"title":"x","priority":"high","type":"scale","campaign":"x","adset":null,"ad":null,"detail":"x","impact":"x","metric":"x"},{"title":"x","priority":"medium","type":"fix","campaign":"x","adset":null,"ad":null,"detail":"x","impact":"x","metric":"x"},{"title":"x","priority":"low","type":"test","campaign":"x","adset":null,"ad":null,"detail":"x","impact":"x","metric":"x"}]}`)
 
   try {
     const part1 = JSON.parse(step1.trim())
@@ -87,6 +82,6 @@ Return JSON only with exactly 3 suggestions:
       generatedAt: new Date().toISOString()
     }
   } catch(e) {
-    throw new Error(`Parse failed. Step1: ${step1.substring(0,200)} Step2: ${step2.substring(0,200)}`)
+    throw new Error(`Parse failed. S1: ${step1.substring(0,150)} S2: ${step2.substring(0,150)}`)
   }
 }
