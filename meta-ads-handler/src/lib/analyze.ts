@@ -19,83 +19,7 @@ export interface AnalysisResult {
   generatedAt: string
 }
 
-async function fetchKnowledgeBase(): Promise<string> {
-  try {
-    const repo = process.env.GITHUB_REPO
-    const branch = process.env.GITHUB_BRANCH || 'main'
-    if (!repo) return ''
-    const url = `https://raw.githubusercontent.com/${repo}/${branch}/knowledge/strategies.json`
-    const res = await fetch(url, { next: { revalidate: 3600 } })
-    if (!res.ok) return ''
-    const data = await res.json()
-    const entries = (data.entries || []).slice(0, 10)
-    if (!entries.length) return ''
-    const lines = entries.map((e: { category: string; key_takeaway: string }) =>
-      `[${e.category}] ${e.key_takeaway}`
-    ).join('\n')
-    return `\n\nKNOWLEDGE BASE:\n${lines}`
-  } catch {
-    return ''
-  }
-}
-
-const BASE_SYSTEM = `You are a Meta Ads strategist. Analyze campaign data and return ONLY a JSON object.
-
-RULES:
-- Never suggest specific budget amounts
-- Reference actual numbers from the data
-- Flag creative fatigue when frequency > 4
-- Keep all text fields under 100 characters
-
-Return ONLY this JSON structure with no extra text:
-{
-  "summary": "2-3 sentence overview under 200 chars",
-  "score": 75,
-  "suggestions": [
-    {
-      "title": "short title under 50 chars",
-      "priority": "high",
-      "type": "scale",
-      "campaign": "campaign name",
-      "adset": null,
-      "ad": null,
-      "detail": "specific explanation under 100 chars",
-      "impact": "expected outcome under 80 chars",
-      "metric": "ROAS: 0.8x"
-    }
-  ]
-}
-
-Generate exactly 5 suggestions ordered by priority.`
-
-export async function analyzeAccount(
-  campaigns: Campaign[],
-  goals: string,
-  accountType: string,
-  geminiKey: string
-): Promise<AnalysisResult> {
-  const kb = await fetchKnowledgeBase()
-  const system = BASE_SYSTEM + kb
-
-  // Send condensed campaign data to reduce token usage
-  const condensed = campaigns.map(c => ({
-    name: c.name,
-    status: c.status,
-    spend: c.spend,
-    roas: parseFloat(c.roas.toFixed(2)),
-    ctr: parseFloat(c.ctr.toFixed(2)),
-    frequency: parseFloat(c.frequency.toFixed(2)),
-    conversions: c.conversions,
-    adsets: c.adsets?.slice(0, 3).map(s => ({
-      name: s.name,
-      roas: parseFloat(s.roas.toFixed(2)),
-      ctr: parseFloat(s.ctr.toFixed(2)),
-      frequency: parseFloat(s.frequency.toFixed(2)),
-    }))
-  }))
-
-  const prompt = `${system}\n\nAccount type: ${accountType}\nGoals: ${goals || 'Maximize ROAS'}\n\nCampaigns:\n${JSON.stringify(condensed)}`
-
+async function geminiCall(geminiKey: string, prompt: string): Promise<string> {
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
     {
@@ -105,21 +29,64 @@ export async function analyzeAccount(
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: {
           temperature: 0.1,
-          maxOutputTokens: 2000,
+          maxOutputTokens: 800,
           responseMimeType: 'application/json'
         }
       })
     }
   )
-
   if (!res.ok) {
     const err = await res.text()
     throw new Error(`Gemini API error: ${res.status} ${err}`)
   }
-
   const data = await res.json()
-  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || ''
-  const clean = text.replace(/```json|```/g, '').trim()
-  const parsed = JSON.parse(clean)
-  return { ...parsed, generatedAt: new Date().toISOString() }
+  return data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}'
+}
+
+export async function analyzeAccount(
+  campaigns: Campaign[],
+  goals: string,
+  accountType: string,
+  geminiKey: string
+): Promise<AnalysisResult> {
+
+  const condensed = campaigns.slice(0, 8).map(c => ({
+    n: c.name.substring(0, 30),
+    s: c.status,
+    sp: c.spend,
+    r: parseFloat(c.roas.toFixed(2)),
+    ct: parseFloat(c.ctr.toFixed(2)),
+    f: parseFloat(c.frequency.toFixed(2)),
+    cv: c.conversions,
+  }))
+
+  // Step 1: Get summary and score
+  const step1 = await geminiCall(geminiKey, 
+    `Meta Ads account analysis. Goals: ${goals || 'Maximize ROAS'}. Data: ${JSON.stringify(condensed)}
+    
+Return JSON only: {"summary":"2 sentence overview","score":75}`)
+
+  // Step 2: Get suggestions separately  
+  const step2 = await geminiCall(geminiKey,
+    `Meta Ads campaigns: ${JSON.stringify(condensed)}
+    
+Return JSON only with exactly 3 suggestions:
+{"suggestions":[
+{"title":"t","priority":"high","type":"scale","campaign":"c","adset":null,"ad":null,"detail":"d","impact":"i","metric":"m"},
+{"title":"t","priority":"medium","type":"fix","campaign":"c","adset":null,"ad":null,"detail":"d","impact":"i","metric":"m"},
+{"title":"t","priority":"low","type":"test","campaign":"c","adset":null,"ad":null,"detail":"d","impact":"i","metric":"m"}
+]}`)
+
+  try {
+    const part1 = JSON.parse(step1.trim())
+    const part2 = JSON.parse(step2.trim())
+    return {
+      summary: part1.summary || 'Analysis complete.',
+      score: part1.score || 50,
+      suggestions: part2.suggestions || [],
+      generatedAt: new Date().toISOString()
+    }
+  } catch(e) {
+    throw new Error(`Parse failed. Step1: ${step1.substring(0,200)} Step2: ${step2.substring(0,200)}`)
+  }
 }
