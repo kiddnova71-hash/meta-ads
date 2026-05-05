@@ -43,6 +43,15 @@ async function geminiCall(geminiKey: string, prompt: string): Promise<string> {
   return data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}'
 }
 
+async function getSuggestion(geminiKey: string, dataStr: string, priority: string, type: string): Promise<Suggestion> {
+  const text = await geminiCall(geminiKey,
+    `Meta Ads: ${dataStr}
+Give 1 ${priority} priority ${type} suggestion.
+Return JSON only: {"title":"max 40 chars","priority":"${priority}","type":"${type}","campaign":"name","adset":null,"ad":null,"detail":"max 80 chars","impact":"max 60 chars","metric":"e.g. ROAS:2x"}`)
+  const parsed = JSON.parse(text.trim())
+  return parsed
+}
+
 export async function analyzeAccount(
   campaigns: Campaign[],
   goals: string,
@@ -61,27 +70,23 @@ export async function analyzeAccount(
 
   const dataStr = JSON.stringify(condensed)
 
-  const step1 = await geminiCall(geminiKey,
-    `Meta Ads data: ${dataStr}
+  // Run all calls in parallel
+  const [step1, s1, s2, s3] = await Promise.all([
+    geminiCall(geminiKey,
+      `Meta Ads: ${dataStr}
 Goals: ${goals || 'Maximize ROAS'}
-Return JSON: {"summary":"max 100 chars total","score":75}
-Keep summary under 100 characters.`)
+Return JSON: {"summary":"max 100 chars","score":75}`),
+    getSuggestion(geminiKey, dataStr, 'high', 'scale'),
+    getSuggestion(geminiKey, dataStr, 'medium', 'fix'),
+    getSuggestion(geminiKey, dataStr, 'low', 'test'),
+  ])
 
-  const step2 = await geminiCall(geminiKey,
-    `Meta Ads data: ${dataStr}
-Return JSON with 3 suggestions. Keep each field under 60 chars:
-{"suggestions":[{"title":"x","priority":"high","type":"scale","campaign":"x","adset":null,"ad":null,"detail":"x","impact":"x","metric":"x"},{"title":"x","priority":"medium","type":"fix","campaign":"x","adset":null,"ad":null,"detail":"x","impact":"x","metric":"x"},{"title":"x","priority":"low","type":"test","campaign":"x","adset":null,"ad":null,"detail":"x","impact":"x","metric":"x"}]}`)
+  const part1 = JSON.parse(step1.trim())
 
-  try {
-    const part1 = JSON.parse(step1.trim())
-    const part2 = JSON.parse(step2.trim())
-    return {
-      summary: part1.summary || 'Analysis complete.',
-      score: part1.score || 50,
-      suggestions: part2.suggestions || [],
-      generatedAt: new Date().toISOString()
-    }
-  } catch(e) {
-    throw new Error(`Parse failed. S1: ${step1.substring(0,150)} S2: ${step2.substring(0,150)}`)
+  return {
+    summary: part1.summary || 'Analysis complete.',
+    score: part1.score || 50,
+    suggestions: [s1, s2, s3],
+    generatedAt: new Date().toISOString()
   }
 }
