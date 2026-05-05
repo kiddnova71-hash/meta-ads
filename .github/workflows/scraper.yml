@@ -1,0 +1,42 @@
+name: Meta Ads Knowledge Scraper
+
+on:
+  schedule:
+    # Runs every day at 6:00 AM UTC (before your 7am alert)
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+    # Also allows manual trigger from GitHub Actions tab
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # needed to commit knowledge base back to repo
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GH_PAT }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r scripts/requirements.txt
+
+      - name: Run scraper
+        env:
+          APIFY_API_TOKEN: ${{ secrets.APIFY_API_TOKEN }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python scripts/scraper.py
+
+      - name: Commit updated knowledge base
+        run: |
+          git config user.name "Meta Ads Bot"
+          git config user.email "bot@meta-ads-handler"
+          git add knowledge/strategies.json
+          git diff --staged --quiet || git commit -m "🧠 Knowledge base update $(date -u '+%Y-%m-%d')"
+          git push
