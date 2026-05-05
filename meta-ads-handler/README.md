@@ -83,3 +83,4 @@ The cron endpoint is: `GET /api/cron` (secured with `CRON_SECRET`).
 2. Security → 2-Step Verification (must be on)
 3. Search for "App passwords" → Create one named "Meta Ads Handler"
 4. Use that 16-character password as `SMTP_PASS`
+# Meta Ads Handler
