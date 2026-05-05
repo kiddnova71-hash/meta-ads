@@ -124,7 +124,23 @@ export async function analyzeAccount(
 
   const data = await res.json()
   const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || ''
-  const clean = text.replace(/```json|```/g, '').trim()
-  const parsed = JSON.parse(clean)
-  return { ...parsed, generatedAt: new Date().toISOString() }
+  let clean = text.replace(/```json|```/g, '').trim()
+const jsonMatch = clean.match(/\{[\s\S]*/)
+if (jsonMatch) clean = jsonMatch[0]
+let openBraces = 0, openBrackets = 0, inString = false, escape = false
+for (const ch of clean) {
+  if (escape) { escape = false; continue }
+  if (ch === '\\' && inString) { escape = true; continue }
+  if (ch === '"') { inString = !inString; continue }
+  if (!inString) {
+    if (ch === '{') openBraces++
+    else if (ch === '}') openBraces--
+    else if (ch === '[') openBrackets++
+    else if (ch === ']') openBrackets--
+  }
+}
+while (openBrackets > 0) { clean += '"}]'; openBrackets-- }
+while (openBraces > 0) { clean += '}'; openBraces-- }
+const parsed = JSON.parse(clean)
+return { ...parsed, generatedAt: new Date().toISOString() }
 }
