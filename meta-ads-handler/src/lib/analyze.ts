@@ -28,47 +28,45 @@ async function fetchKnowledgeBase(): Promise<string> {
     const res = await fetch(url, { next: { revalidate: 3600 } })
     if (!res.ok) return ''
     const data = await res.json()
-    const entries = (data.entries || []).slice(0, 20)
+    const entries = (data.entries || []).slice(0, 10)
     if (!entries.length) return ''
-    const lines = entries.map((e: { category: string; summary: string; key_takeaway: string; confidence: number }) =>
-      `[${e.category}] ${e.summary} | Takeaway: ${e.key_takeaway} (confidence: ${e.confidence})`
+    const lines = entries.map((e: { category: string; key_takeaway: string }) =>
+      `[${e.category}] ${e.key_takeaway}`
     ).join('\n')
-    return `\n\nCURRENT KNOWLEDGE BASE (community-validated ecom Meta Ads strategies):\n${lines}\n\nReference these strategies where relevant in your suggestions.`
+    return `\n\nKNOWLEDGE BASE:\n${lines}`
   } catch {
     return ''
   }
 }
 
-const BASE_SYSTEM = `You are an elite Meta Ads strategist. Analyze campaign data at campaign, ad set, and ad level. Be data-driven, specific, and direct.
+const BASE_SYSTEM = `You are a Meta Ads strategist. Analyze campaign data and return ONLY a JSON object.
 
-CRITICAL RULES:
-- NEVER suggest specific budget dollar amounts or percentages. Use directional language only: "strong candidate for scaling", "consider reducing allocation", "underperforming relative to spend".
-- Reference actual numbers from the data in your analysis.
-- Flag creative fatigue (frequency > 4, declining CTR over time).
-- Identify audience overlap or targeting issues.
-- Highlight winning creatives that should be scaled or tested in new audiences.
-- Flag campaigns/adsets where conversion volume is too low for the algorithm to optimize.
+RULES:
+- Never suggest specific budget amounts
+- Reference actual numbers from the data
+- Flag creative fatigue when frequency > 4
+- Keep all text fields under 100 characters
 
-Respond ONLY with valid JSON, no markdown, no code fences:
+Return ONLY this JSON structure with no extra text:
 {
-  "summary": "3-4 sentence account-level overview",
-  "score": 0-100,
+  "summary": "2-3 sentence overview under 200 chars",
+  "score": 75,
   "suggestions": [
     {
-      "title": "concise title",
-      "priority": "high|medium|low",
-      "type": "scale|pause|test|fix|creative",
+      "title": "short title under 50 chars",
+      "priority": "high",
+      "type": "scale",
       "campaign": "campaign name",
-      "adset": "adset name or null",
-      "ad": "ad name or null",
-      "detail": "specific, data-backed explanation with numbers",
-      "impact": "what happens if actioned",
-      "metric": "key metric driving this (e.g. ROAS: 0.8x, Frequency: 6.2)"
+      "adset": null,
+      "ad": null,
+      "detail": "specific explanation under 100 chars",
+      "impact": "expected outcome under 80 chars",
+      "metric": "ROAS: 0.8x"
     }
   ]
 }
 
-Generate 6-10 suggestions ordered by priority. Types: scale=increase allocation signal, pause=stop/reduce, test=run experiment, fix=structural issue, creative=creative change needed.`
+Generate exactly 5 suggestions ordered by priority.`
 
 export async function analyzeAccount(
   campaigns: Campaign[],
@@ -77,33 +75,26 @@ export async function analyzeAccount(
   geminiKey: string
 ): Promise<AnalysisResult> {
   const kb = await fetchKnowledgeBase()
-  const systemPrompt = BASE_SYSTEM + kb
+  const system = BASE_SYSTEM + kb
 
-  const payload = {
-    accountType,
-    goals: goals || 'Maximize ROAS while scaling profitable campaigns',
-    campaigns: campaigns.map(c => ({
-      name: c.name, status: c.status,
-      spend: c.spend, revenue: c.revenue, roas: parseFloat(c.roas.toFixed(2)),
-      impressions: c.impressions, clicks: c.clicks,
-      ctr: parseFloat(c.ctr.toFixed(2)), cpc: parseFloat(c.cpc.toFixed(2)),
-      frequency: parseFloat(c.frequency.toFixed(2)), conversions: c.conversions,
-      adsets: c.adsets?.map(s => ({
-        name: s.name, status: s.status,
-        spend: s.spend, roas: parseFloat(s.roas.toFixed(2)),
-        ctr: parseFloat(s.ctr.toFixed(2)), frequency: parseFloat(s.frequency.toFixed(2)),
-        conversions: s.conversions,
-        ads: s.ads?.map(a => ({
-          name: a.name, status: a.status,
-          spend: a.spend, roas: parseFloat(a.roas.toFixed(2)),
-          ctr: parseFloat(a.ctr.toFixed(2)), frequency: parseFloat(a.frequency.toFixed(2)),
-          creative: a.creative
-        }))
-      }))
+  // Send condensed campaign data to reduce token usage
+  const condensed = campaigns.map(c => ({
+    name: c.name,
+    status: c.status,
+    spend: c.spend,
+    roas: parseFloat(c.roas.toFixed(2)),
+    ctr: parseFloat(c.ctr.toFixed(2)),
+    frequency: parseFloat(c.frequency.toFixed(2)),
+    conversions: c.conversions,
+    adsets: c.adsets?.slice(0, 3).map(s => ({
+      name: s.name,
+      roas: parseFloat(s.roas.toFixed(2)),
+      ctr: parseFloat(s.ctr.toFixed(2)),
+      frequency: parseFloat(s.frequency.toFixed(2)),
     }))
-  }
+  }))
 
-  const fullPrompt = `${systemPrompt}\n\nAnalyze this Meta Ads account:\n\n${JSON.stringify(payload, null, 2)}`
+  const prompt = `${system}\n\nAccount type: ${accountType}\nGoals: ${goals || 'Maximize ROAS'}\n\nCampaigns:\n${JSON.stringify(condensed)}`
 
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
@@ -111,8 +102,12 @@ export async function analyzeAccount(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        contents: [{ parts: [{ text: fullPrompt }] }],
-        generationConfig: { temperature: 0.2, maxOutputTokens: 4000 }
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.1,
+          maxOutputTokens: 2000,
+          responseMimeType: 'application/json'
+        }
       })
     }
   )
@@ -124,23 +119,7 @@ export async function analyzeAccount(
 
   const data = await res.json()
   const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || ''
-  let clean = text.replace(/```json|```/g, '').trim()
-const jsonMatch = clean.match(/\{[\s\S]*/)
-if (jsonMatch) clean = jsonMatch[0]
-let openBraces = 0, openBrackets = 0, inString = false, escape = false
-for (const ch of clean) {
-  if (escape) { escape = false; continue }
-  if (ch === '\\' && inString) { escape = true; continue }
-  if (ch === '"') { inString = !inString; continue }
-  if (!inString) {
-    if (ch === '{') openBraces++
-    else if (ch === '}') openBraces--
-    else if (ch === '[') openBrackets++
-    else if (ch === ']') openBrackets--
-  }
-}
-while (openBrackets > 0) { clean += '"}]'; openBrackets-- }
-while (openBraces > 0) { clean += '}'; openBraces-- }
-const parsed = JSON.parse(clean)
-return { ...parsed, generatedAt: new Date().toISOString() }
+  const clean = text.replace(/```json|```/g, '').trim()
+  const parsed = JSON.parse(clean)
+  return { ...parsed, generatedAt: new Date().toISOString() }
 }
