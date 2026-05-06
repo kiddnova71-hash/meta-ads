@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "last_updated": "2026-05-01T00:00:00+00:00",
+  "last_updated": "2026-05-06T00:06:04.120866+00:00",
   "entries": [
     {
       "id": "seed_001",
@@ -11,7 +11,10 @@
       "confidence": 0.91,
       "comment_sentiment": "validating",
       "comment_notes": "Multiple media buyers confirmed this framework reduces wasted spend on bad creative",
-      "applicable_to": ["ecommerce", "lead_gen"],
+      "applicable_to": [
+        "ecommerce",
+        "lead_gen"
+      ],
       "requires_budget": false,
       "source_author": "@NickShackelford",
       "source_url": "",
@@ -31,7 +34,9 @@
       "confidence": 0.88,
       "comment_sentiment": "validating",
       "comment_notes": "Strong consensus in comments — multiple buyers reporting 20-40% ROAS improvement switching to broad",
-      "applicable_to": ["ecommerce"],
+      "applicable_to": [
+        "ecommerce"
+      ],
       "requires_budget": false,
       "source_author": "@BenHeath",
       "source_url": "",
@@ -51,7 +56,11 @@
       "confidence": 0.92,
       "comment_sentiment": "validating",
       "comment_notes": "Universally agreed — frequency 4+ is the most common reason for unexplained ROAS decline",
-      "applicable_to": ["ecommerce", "lead_gen", "brand_awareness"],
+      "applicable_to": [
+        "ecommerce",
+        "lead_gen",
+        "brand_awareness"
+      ],
       "requires_budget": false,
       "source_author": "@jonloomer",
       "source_url": "",
@@ -71,7 +80,9 @@
       "confidence": 0.85,
       "comment_sentiment": "mixed",
       "comment_notes": "Mostly positive but some accounts with niche products report worse results — works best for broad-appeal products",
-      "applicable_to": ["ecommerce"],
+      "applicable_to": [
+        "ecommerce"
+      ],
       "requires_budget": false,
       "source_author": "@andrewhubbard_",
       "source_url": "",
@@ -91,7 +102,10 @@
       "confidence": 0.93,
       "comment_sentiment": "validating",
       "comment_notes": "Overwhelming agreement — hook testing is universally cited as highest ROI creative activity",
-      "applicable_to": ["ecommerce", "lead_gen"],
+      "applicable_to": [
+        "ecommerce",
+        "lead_gen"
+      ],
       "requires_budget": false,
       "source_author": "@samuelpng",
       "source_url": "",
@@ -111,7 +125,10 @@
       "confidence": 0.84,
       "comment_sentiment": "validating",
       "comment_notes": "Consensus that cost cap kills delivery if used too early — needs conversion history to work",
-      "applicable_to": ["ecommerce", "lead_gen"],
+      "applicable_to": [
+        "ecommerce",
+        "lead_gen"
+      ],
       "requires_budget": false,
       "source_author": "@FoxwellDigital",
       "source_url": "",
@@ -131,7 +148,9 @@
       "confidence": 0.87,
       "comment_sentiment": "validating",
       "comment_notes": "Strong agreement across ecom niche — UGC winning in most accounts",
-      "applicable_to": ["ecommerce"],
+      "applicable_to": [
+        "ecommerce"
+      ],
       "requires_budget": false,
       "source_author": "@GoodMktg",
       "source_url": "",
@@ -151,7 +170,9 @@
       "confidence": 0.86,
       "comment_sentiment": "validating",
       "comment_notes": "Consistent reports of 30-day windows underperforming 7-day for most ecom categories",
-      "applicable_to": ["ecommerce"],
+      "applicable_to": [
+        "ecommerce"
+      ],
       "requires_budget": false,
       "source_author": "@andrewhubbard_",
       "source_url": "",
